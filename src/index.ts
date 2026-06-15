@@ -8,6 +8,7 @@
  * Commands:
  * - /init-subagents — Initialize General-Purpose sub-agents (Low/Medium/High) in .pi/agents/
  * - /init-context   — Analyze project and generate AGENTS.md
+ * - /add-rules      — Ensure AGENTS.md declares that `using-agent-skills` must always be loaded
  * - /spec [name]    — Generate SPEC.md template for a new project/feature
  * - /plan [auto]    — Read SPEC.md and generate tasks/plan.md + tasks/todo.md
  * - /build [auto]   — Implement the next pending task from tasks/todo.md
@@ -944,6 +945,94 @@ You handle complex tasks that require thorough analysis, careful planning, and d
       } catch (err) {
         ctx.ui.notify(
           `Failed to read tasks: ${err instanceof Error ? err.message : String(err)}`,
+          "error",
+        );
+      }
+    },
+  });
+
+  // ─── AGENTS.md Rule Injection ───────────────────────
+
+  const MUST_LOAD_OPEN = "<!--MUST-LOAD-->";
+  const MUST_LOAD_CLOSE = "<!--MUST-LOAD-->";
+  const MUST_LOAD_SKILL = "using-agent-skills";
+
+  pi.registerCommand("add-rules", {
+    description:
+      "Ensure AGENTS.md declares that the using-agent-skills skill must always be loaded",
+    handler: async (_args: string, ctx: ExtensionContext) => {
+      try {
+        const cwd = process.cwd();
+        const agentsPath = path.join(cwd, "AGENTS.md");
+
+        if (!fs.existsSync(agentsPath)) {
+          ctx.ui.notify(
+            "AGENTS.md not found. Run /init-context first.",
+            "error",
+          );
+          return;
+        }
+
+        const content = fs.readFileSync(agentsPath, "utf-8");
+
+        // Find the MUST-LOAD block (open and close markers).
+        // The block is everything between the first <!--MUST-LOAD--> and
+        // the next <!--MUST-LOAD--> after it.
+        const openIdx = content.indexOf(MUST_LOAD_OPEN);
+        const closeIdx = openIdx >= 0
+          ? content.indexOf(MUST_LOAD_CLOSE, openIdx + MUST_LOAD_OPEN.length)
+          : -1;
+
+        // No block at all — append one.
+        if (openIdx < 0 || closeIdx < 0) {
+          const block = [
+            "",
+            MUST_LOAD_OPEN,
+            `Always load skill: ${MUST_LOAD_SKILL}`,
+            MUST_LOAD_CLOSE,
+            "",
+          ].join("\n");
+          const newContent =
+            content.replace(/\s*$/, "") + "\n" + block;
+          fs.writeFileSync(agentsPath, newContent, "utf-8");
+          ctx.ui.notify(
+            `✓ Added MUST-LOAD block referencing "${MUST_LOAD_SKILL}" to AGENTS.md.`,
+            "info",
+          );
+          return;
+        }
+
+        // Block exists. Check whether the skill is already mentioned.
+        const blockBody = content.slice(
+          openIdx + MUST_LOAD_OPEN.length,
+          closeIdx,
+        );
+
+        if (new RegExp(`\\b${MUST_LOAD_SKILL}\\b`).test(blockBody)) {
+          ctx.ui.notify(
+            `✓ AGENTS.md already declares "Always load skill: ${MUST_LOAD_SKILL}". No changes needed.`,
+            "info",
+          );
+          return;
+        }
+
+        // Block exists but skill is not mentioned — insert the line
+        // right after the opening marker so the rule is the first thing
+        // an agent reading the block sees.
+        const insertion = `Always load skill: ${MUST_LOAD_SKILL}\n`;
+        const newContent =
+          content.slice(0, openIdx + MUST_LOAD_OPEN.length) +
+          "\n" +
+          insertion +
+          content.slice(openIdx + MUST_LOAD_OPEN.length);
+        fs.writeFileSync(agentsPath, newContent, "utf-8");
+        ctx.ui.notify(
+          `✓ Inserted "Always load skill: ${MUST_LOAD_SKILL}" into existing MUST-LOAD block in AGENTS.md.`,
+          "info",
+          );
+      } catch (err) {
+        ctx.ui.notify(
+          `Failed to add rules: ${err instanceof Error ? err.message : String(err)}`,
           "error",
         );
       }
