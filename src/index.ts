@@ -7,8 +7,8 @@
  *
  * Commands:
  * - /init-subagents — Initialize General-Purpose sub-agents (Low/Medium/High) in .pi/agents/
- * - /init-context   — Analyze project and generate AGENTS.md
- * - /add-rules      — Ensure AGENTS.md declares that `using-agent-skills` must always be loaded
+ * - /init-context   — Analyze project and generate AGENTS.md (preserves MUST-LOAD block)
+ * - /add-rules      — Ensure AGENTS.md declares that `using-agent-skills` must always be loaded (creates AGENTS.md if missing)
  * - /spec [name]    — Generate SPEC.md template for a new project/feature
  * - /plan [auto]    — Read SPEC.md and generate tasks/plan.md + tasks/todo.md
  * - /build [auto]   — Implement the next pending task from tasks/todo.md
@@ -592,18 +592,26 @@ You handle complex tasks that require thorough analysis, careful planning, and d
   }
 
   pi.registerCommand("init-context", {
-    description: "Analyze current project and generate AGENTS.md",
+    description: "Analyze current project and generate AGENTS.md (preserves MUST-LOAD block if present)",
     handler: async (_args: string, ctx: ExtensionContext) => {
       try {
         const cwd = process.cwd();
         const outputPath = path.join(cwd, "AGENTS.md");
 
+        // Read existing MUST-LOAD block before overwriting
+        let existingBlock: string | null = null;
         if (fs.existsSync(outputPath)) {
-          ctx.ui.notify("AGENTS.md already exists. Overwriting...", "warning");
+          const oldContent = fs.readFileSync(outputPath, "utf-8");
+          existingBlock = extractMustLoadBlock(oldContent);
         }
 
         const analysis = analyzeProject(cwd);
-        const content = generateAgentsMd(analysis);
+        let content = generateAgentsMd(analysis);
+
+        // Re-append preserved MUST-LOAD block (right before the trailing newline)
+        if (existingBlock) {
+          content = content.replace(/\s*$/, "") + "\n" + existingBlock + "\n";
+        }
 
         fs.writeFileSync(outputPath, content, "utf-8");
 
@@ -614,6 +622,7 @@ You handle complex tasks that require thorough analysis, careful planning, and d
           `  - Structure entries: ${analysis.structure.length}`,
           `  - Conventions: ${analysis.conventions.length}`,
           `  - Testing: ${analysis.testingStrategy.length} items`,
+          existingBlock ? `  - MUST-LOAD block preserved` : `  - (no MUST-LOAD block to preserve)`,
         ].join("\n");
 
         ctx.ui.notify(summary, "info");
@@ -956,19 +965,57 @@ You handle complex tasks that require thorough analysis, careful planning, and d
   const MUST_LOAD_OPEN = "<!--MUST-LOAD-->";
   const MUST_LOAD_CLOSE = "<!--MUST-LOAD-->";
   const MUST_LOAD_SKILL = "using-agent-skills";
+  const DEFAULT_AGENTS_CONTENT = `# Project
+
+## Tech Stack
+
+_Detected by running /init-context._
+
+## Commands
+
+_Detected by running /init-context._
+
+## Code Conventions
+
+_Detected by running /init-context._
+
+## Boundaries
+
+_Detected by running /init-context._
+`;
+
+  const MUST_LOAD_BLOCK = [
+    "",
+    MUST_LOAD_OPEN,
+    `Always load skill: ${MUST_LOAD_SKILL}`,
+    MUST_LOAD_CLOSE,
+    "",
+  ].join("\n");
+
+  /** Extract the <--MUST-LOAD-->...<!--MUST-LOAD--> block from content, or null. */
+  function extractMustLoadBlock(content: string): string | null {
+    const openIdx = content.indexOf(MUST_LOAD_OPEN);
+    if (openIdx < 0) return null;
+    const closeIdx = content.indexOf(MUST_LOAD_CLOSE, openIdx + MUST_LOAD_OPEN.length);
+    if (closeIdx < 0) return null;
+    return content.slice(openIdx, closeIdx + MUST_LOAD_CLOSE.length);
+  }
 
   pi.registerCommand("add-rules", {
     description:
-      "Ensure AGENTS.md declares that the using-agent-skills skill must always be loaded",
+      "Ensure AGENTS.md declares that the using-agent-skills skill must always be loaded. Creates AGENTS.md if missing.",
     handler: async (_args: string, ctx: ExtensionContext) => {
       try {
         const cwd = process.cwd();
         const agentsPath = path.join(cwd, "AGENTS.md");
 
+        // If AGENTS.md doesn't exist, create it with the MUST-LOAD block
         if (!fs.existsSync(agentsPath)) {
+          const content = DEFAULT_AGENTS_CONTENT.replace(/\s*$/, "") + "\n" + MUST_LOAD_BLOCK + "\n";
+          fs.writeFileSync(agentsPath, content, "utf-8");
           ctx.ui.notify(
-            "AGENTS.md not found. Run /init-context first.",
-            "error",
+            `✓ Created AGENTS.md with MUST-LOAD block referencing "${MUST_LOAD_SKILL}".\n  Run /init-context to fill project details (MUST-LOAD block will be preserved).`,
+            "info",
           );
           return;
         }
@@ -976,8 +1023,6 @@ You handle complex tasks that require thorough analysis, careful planning, and d
         const content = fs.readFileSync(agentsPath, "utf-8");
 
         // Find the MUST-LOAD block (open and close markers).
-        // The block is everything between the first <!--MUST-LOAD--> and
-        // the next <!--MUST-LOAD--> after it.
         const openIdx = content.indexOf(MUST_LOAD_OPEN);
         const closeIdx = openIdx >= 0
           ? content.indexOf(MUST_LOAD_CLOSE, openIdx + MUST_LOAD_OPEN.length)
@@ -985,15 +1030,8 @@ You handle complex tasks that require thorough analysis, careful planning, and d
 
         // No block at all — append one.
         if (openIdx < 0 || closeIdx < 0) {
-          const block = [
-            "",
-            MUST_LOAD_OPEN,
-            `Always load skill: ${MUST_LOAD_SKILL}`,
-            MUST_LOAD_CLOSE,
-            "",
-          ].join("\n");
           const newContent =
-            content.replace(/\s*$/, "") + "\n" + block;
+            content.replace(/\s*$/, "") + "\n" + MUST_LOAD_BLOCK;
           fs.writeFileSync(agentsPath, newContent, "utf-8");
           ctx.ui.notify(
             `✓ Added MUST-LOAD block referencing "${MUST_LOAD_SKILL}" to AGENTS.md.`,
