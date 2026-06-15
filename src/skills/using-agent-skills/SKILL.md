@@ -38,9 +38,11 @@ Task arrives
     │   ├── Too complex? ─────────────→ code-simplification
     │   └── Security concerns? ───────→ security-and-hardening (skipped in pi-helper)
     ├── Committing/branching? ─────────→ git-workflow-and-versioning
-    │                                       (implemented as the `git-commit` skill in pi-helper)
-    └── Adding/removing sub-agents? ───→ pi-sub-agent-creator
-                                            (initialize via /init-subagents command)
+    │                                       (replaces the older `git-commit` skill;
+    │                                        covers full git lifecycle, not just the message)
+    ├── Adding/removing sub-agents? ───→ pi-sub-agent-creator
+    │                                       (initialize via /init-subagents command)
+    └── Creating/improving a skill? ───→ skill-creator
 ```
 
 ## Skills Bundled with pi-helper
@@ -58,9 +60,9 @@ The following skills live in `src/skills/` and are available to the agent in any
 | `debugging-and-error-recovery` | Verify | Agent detects test failure, build break, or unexpected error |
 | `code-review-and-quality` | Review | Before merge / after feature implementation |
 | `code-simplification` | Review | After implementation, before commit |
-| `git-commit` | Ship | When committing changes (replaces `git-workflow-and-versioning`) |
-| `pi-sub-agent-creator` | Build | When defining a new `.pi/agents/<name>.md` |
-| `skill-creator` | Meta | When creating or improving a skill |
+| `git-workflow-and-versioning` | Ship | When committing, branching, or managing git history (replaces the older `git-commit` skill) |
+| `pi-sub-agent-creator` | Build | When defining a new `.pi/agents/<name>.md` (or via `/init-subagents`) |
+| `skill-creator` | Meta | When creating or improving a skill in this library |
 
 ## Core Operating Behaviors
 
@@ -189,13 +191,14 @@ For a complete feature in a pi session, the typical skill sequence is:
 8.  debugging-and-error-recovery              → Step in when tests fail, build breaks, behavior diverges
 9.  code-review-and-quality                   → Multi-axis review before merge
 10. code-simplification                       → Reduce unnecessary complexity while preserving behavior
-11. git-commit                                → Atomic commit, conventional message
-12. pi-sub-agent-creator                      → Add new sub-agents to .pi/agents/ if the workflow needs them
+11. git-workflow-and-versioning               → Atomic commit, conventional message, save points
+12. pi-sub-agent-creator                      → (optional) Add new sub-agents to .pi/agents/ if the workflow needs them
+13. skill-creator                             → (optional) Create or improve a skill in this library
 ```
 
-Not every task needs every skill. A bug fix might only need: `debugging-and-error-recovery` → `test-driven-development` → `code-review-and-quality` → `git-commit`.
+Not every task needs every skill. A bug fix might only need: `debugging-and-error-recovery` → `test-driven-development` → `code-review-and-quality` → `git-workflow-and-versioning`.
 
-A typo fix might only need: `git-commit`.
+A typo fix might only need: `git-workflow-and-versioning`.
 
 ## Quick Reference
 
@@ -211,6 +214,6 @@ A typo fix might only need: `git-commit`.
 | Verify | `debugging-and-error-recovery` | Reproduce → localize → fix → guard | Agent detects failure |
 | Review | `code-review-and-quality` | Five-axis review with quality gates | Before merge |
 | Review | `code-simplification` | Preserve behavior while reducing unnecessary complexity | After implementation, before commit |
-| Ship | `git-commit` | Atomic commits, conventional messages | When committing |
-| Meta | `skill-creator` | Create or improve a skill | When the skill library needs a new entry |
+| Ship | `git-workflow-and-versioning` | Atomic commits, conventional messages, branching, worktrees | When committing or managing git history |
+| Meta | `skill-creator` | Create or improve a skill in the library | When the skill library needs a new entry |
 | Meta | `using-agent-skills` | This skill — discover and invoke the others | Every task |
