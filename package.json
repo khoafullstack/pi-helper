@@ -1,0 +1,34 @@
+{
+  "name": "pi-helper",
+  "version": "0.1.0",
+  "description": "A Pi Coding Agent extension with useful helper tools and commands",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eztek/pi-helper.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc",
+    "prebuild": "npm run clean",
+    "check": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.79.4",
+    "@earendil-works/pi-ai": "^0.79.4",
+    "typebox": "^1.2.11",
+    "typescript": "^6.0.3"
+  }
+}
